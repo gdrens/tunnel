@@ -19,13 +19,16 @@ func CreateTunnel(conn net.Conn, key string) (*TunConn, error) {
 		log.Print(err)
 		return nil, err
 	}
-	cmpConn := NewCmpConn(chaConn)
+	cmpConn, err := NewCmpConn(chaConn)
+	if err != nil {
+		return nil, err
+	}
 	return &TunConn{
 		Conn: cmpConn,
 	}, nil
 }
 
 func generateKey(key string) []byte {
-	//generate 32 bytes key
+	// generate 32 bytes key
 	return []byte(fmt.Sprintf("%x", md5.Sum([]byte(key))))
 }

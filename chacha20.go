@@ -11,7 +11,7 @@ import (
 )
 
 type Cha20Conn struct {
-	key     []byte //Must be 32 bytes
+	key     []byte // Must be 32 bytes
 	encoder *chacha20.Cipher
 	decoder *chacha20.Cipher
 	net.Conn
@@ -57,7 +57,10 @@ func decoder(con net.Conn, key []byte) *chacha20.Cipher {
 		log.Print(err)
 		return nil
 	}
-	decoder, _ := chacha20.NewUnauthenticatedCipher(key, nonce)
+	decoder, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	if err != nil {
+		return nil
+	}
 	return decoder
 }
 
@@ -68,6 +71,9 @@ func encoder(con net.Conn, key []byte) *chacha20.Cipher {
 		log.Print(err)
 		return nil
 	}
-	cipher, _ := chacha20.NewUnauthenticatedCipher(key, nonce)
+	cipher, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	if err != nil {
+		return nil
+	}
 	return cipher
 }
