@@ -4,38 +4,34 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
-	"log"
-	"net"
 
 	"golang.org/x/crypto/chacha20"
 )
 
-type Cha20Conn struct {
-	key     []byte // Must be 32 bytes
+type Chacha20 struct {
 	encoder *chacha20.Cipher
 	decoder *chacha20.Cipher
-	net.Conn
+	key     []byte
+	conn    io.ReadWriteCloser
 }
 
-var _ net.Conn = (*Cha20Conn)(nil)
-
-func NewCha20Conn(conn net.Conn, key string) (*Cha20Conn, error) {
-	k := generateKey(key)
-	c := &Cha20Conn{
-		key:     k,
-		Conn:    conn,
-		encoder: encoder(conn, k),
-		decoder: decoder(conn, k),
+func NewChacha20(conn io.ReadWriteCloser) (io.ReadWriteCloser, error) {
+	chacha20 := &Chacha20{
+		key:  generateKey32(cfg.Key),
+		conn: conn,
 	}
-	if c.decoder == nil || c.encoder == nil {
-		return nil, errors.New("create chacha20 stream cipher false")
+	if err := chacha20.createEncoder(); err != nil {
+		return nil, err
 	}
-	return c, nil
+	if err := chacha20.createDecoder(); err != nil {
+		return nil, err
+	}
+	return chacha20, nil
 }
 
-func (c *Cha20Conn) Read(p []byte) (int, error) {
-	n, err := c.Conn.Read(p)
-	if n == 0 {
+func (c *Chacha20) Read(p []byte) (int, error) {
+	n, err := c.conn.Read(p)
+	if err != nil {
 		return n, err
 	}
 	dst := make([]byte, n)
@@ -45,35 +41,43 @@ func (c *Cha20Conn) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (c *Cha20Conn) Write(p []byte) (int, error) {
+func (c *Chacha20) Write(p []byte) (int, error) {
 	dst := make([]byte, len(p))
 	c.encoder.XORKeyStream(dst, p)
-	return c.Conn.Write(dst)
+	return c.conn.Write(dst)
 }
 
-func decoder(con net.Conn, key []byte) *chacha20.Cipher {
+func (c *Chacha20) Close() error {
+	return c.conn.Close()
+}
+
+func (c *Chacha20) createDecoder() error {
 	nonce := make([]byte, chacha20.NonceSizeX)
-	if _, err := io.ReadFull(con, nonce); err != nil {
-		log.Print(err)
-		return nil
-	}
-	decoder, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	n, err := c.conn.Read(nonce)
 	if err != nil {
-		return nil
+		return err
 	}
-	return decoder
+	if n != chacha20.NonceSizeX {
+		return errors.New("Could not read nonce from the connection")
+	}
+	cipher, err := chacha20.NewUnauthenticatedCipher(c.key, nonce)
+	if err != nil {
+		return err
+	}
+	c.decoder = cipher
+	return nil
 }
 
-func encoder(con net.Conn, key []byte) *chacha20.Cipher {
+func (c *Chacha20) createEncoder() error {
 	nonce := make([]byte, chacha20.NonceSizeX)
 	rand.Read(nonce)
-	if _, err := con.Write(nonce); err != nil {
-		log.Print(err)
-		return nil
+	if _, err := c.conn.Write(nonce); err != nil {
+		return err
 	}
-	cipher, err := chacha20.NewUnauthenticatedCipher(key, nonce)
+	cipher, err := chacha20.NewUnauthenticatedCipher(c.key, nonce)
 	if err != nil {
-		return nil
+		return err
 	}
-	return cipher
+	c.encoder = cipher
+	return nil
 }

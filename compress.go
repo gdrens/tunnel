@@ -3,40 +3,43 @@ package tunnel
 import (
 	"compress/flate"
 	"io"
-	"log"
-	"net"
 )
 
-type CompressConn struct {
-	r io.Reader
-	w *flate.Writer
-	net.Conn
+type Compression struct {
+	r    io.ReadCloser
+	w    *flate.Writer
+	conn io.ReadWriteCloser
 }
 
-var _ net.Conn = (*CompressConn)(nil)
-
-func NewCmpConn(conn net.Conn) (*CompressConn, error) {
-	r := flate.NewReader(conn)
-	w, err := flate.NewWriter(conn, flate.BestSpeed)
+func NewCompress(conn io.ReadWriteCloser) (io.ReadWriteCloser, error) {
+	read := flate.NewReader(conn)
+	write, err := flate.NewWriter(conn, CompressLevel)
 	if err != nil {
 		return nil, err
 	}
-	return &CompressConn{
-		r:    r,
-		w:    w,
-		Conn: conn,
-	}, nil
+	compress := &Compression{
+		r:    read,
+		w:    write,
+		conn: conn,
+	}
+	return compress, nil
 }
 
-func (c *CompressConn) Read(p []byte) (int, error) {
+func (c *Compression) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-func (c *CompressConn) Write(p []byte) (int, error) {
+func (c *Compression) Write(p []byte) (int, error) {
 	n, err := c.w.Write(p)
-	if err := c.w.Flush(); err != nil {
-		log.Print(err)
+	if err != nil {
 		return 0, err
 	}
+	c.w.Flush()
 	return n, err
+}
+
+func (c *Compression) Close() error {
+	c.r.Close()
+	c.w.Close()
+	return c.conn.Close()
 }
