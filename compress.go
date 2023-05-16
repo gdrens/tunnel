@@ -3,17 +3,21 @@ package tunnel
 import (
 	"compress/flate"
 	"io"
+	"net"
+	"time"
 )
 
 type Compression struct {
 	r    io.ReadCloser
 	w    *flate.Writer
-	conn io.ReadWriteCloser
+	conn net.Conn
 }
 
-func NewCompress(conn io.ReadWriteCloser) (io.ReadWriteCloser, error) {
+var _ net.Conn = (*Compression)(nil)
+
+func NewCompress(conn net.Conn, level int) (net.Conn, error) {
 	read := flate.NewReader(conn)
-	write, err := flate.NewWriter(conn, CompressLevel)
+	write, err := flate.NewWriter(conn, level)
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +40,26 @@ func (c *Compression) Write(p []byte) (int, error) {
 	}
 	c.w.Flush()
 	return n, err
+}
+
+func (c *Compression) SetReadDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+func (c *Compression) SetWriteDeadline(t time.Time) error {
+	return c.conn.SetWriteDeadline(t)
+}
+
+func (c *Compression) SetDeadline(t time.Time) error {
+	return c.conn.SetDeadline(t)
+}
+
+func (c *Compression) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *Compression) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
 }
 
 func (c *Compression) Close() error {

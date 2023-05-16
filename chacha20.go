@@ -3,7 +3,8 @@ package tunnel
 import (
 	"crypto/rand"
 	"errors"
-	"io"
+	"net"
+	"time"
 
 	"golang.org/x/crypto/chacha20"
 )
@@ -12,12 +13,14 @@ type Chacha20 struct {
 	encoder *chacha20.Cipher
 	decoder *chacha20.Cipher
 	key     []byte
-	conn    io.ReadWriteCloser
+	conn    net.Conn
 }
 
-func NewChacha20(conn io.ReadWriteCloser) (io.ReadWriteCloser, error) {
+var _ net.Conn = (*Chacha20)(nil)
+
+func NewChacha20(conn net.Conn, key string) (net.Conn, error) {
 	chacha20 := &Chacha20{
-		key:  generateKey32(cfg.Key),
+		key:  generateKey32(key),
 		conn: conn,
 	}
 	if err := chacha20.createEncoder(); err != nil {
@@ -49,6 +52,26 @@ func (c *Chacha20) Write(p []byte) (int, error) {
 
 func (c *Chacha20) Close() error {
 	return c.conn.Close()
+}
+
+func (c *Chacha20) SetWriteDeadline(t time.Time) error {
+	return c.conn.SetWriteDeadline(t)
+}
+
+func (c *Chacha20) SetReadDeadline(t time.Time) error {
+	return c.conn.SetReadDeadline(t)
+}
+
+func (c *Chacha20) SetDeadline(t time.Time) error {
+	return c.conn.SetDeadline(t)
+}
+
+func (c *Chacha20) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+func (c *Chacha20) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
 }
 
 func (c *Chacha20) createDecoder() error {
