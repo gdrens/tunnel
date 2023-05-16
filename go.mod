@@ -1,4 +1,4 @@
-module tunnel
+module github.com/gdrens/tunnel
 
 go 1.20
 
